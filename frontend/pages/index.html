@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>谈指间</title>
+</head>
+
+<body>
+    <header>
+        <h1>谈指间</h1>
+        <p>手势识别系统</p>
+
+        <nav aria-label="主要导航">
+            <a href="#recognition">手势识别</a>
+            <a href="#dictionary">手势词库</a>
+            <a href="#history">历史记录</a>
+            <a href="#settings">系统设置</a>
+        </nav>
+    </header>
+
+    <main>
+        <section id="recognition">
+            <section id="camera-panel">
+                <h2>摄像头画面</h2>
+
+                <div id="camera-preview">
+                    <p>摄像头未启动</p>
+                </div>
+
+                <div id="camera-controls">
+                    <button type="button" id="start-camera">启动摄像头</button>
+                    <button type="button" id="stop-camera" disabled>停止摄像头</button>
+                </div>
+
+                <p id="camera-message" role="status">
+                    等待摄像头权限
+                </p>
+            </section>
+      
+            <aside id="status-panel">
+                <h2>识别状态</h2>
+
+                <p id="connection-status" role="status">
+                    后端未连接
+                </p>
+
+                <dl>
+                    <div>
+                        <dt>手部检测</dt>
+                        <dd id="hand-status">未检测到手部</dd>
+                    </div>
+
+                    <div>
+                        <dt>当前结果</dt>
+                        <dd id="recognized-word">--</dd>
+                    </div>
+
+                    <div>
+                        <dt>置信度</dt>
+                        <dd id="confidence-value">0%</dd>
+                    </div>
+                </dl>
+
+                <label for="stability-progress">稳定进度</label>
+                <progress
+                    id="stability-progress"
+                    value="0"
+                    max="100"
+                 >
+                    0%
+                </progress>
+
+                <p id="recognition-hint">
+                    请将手放入摄像头画面中
+                </p>
+            </aside>
+        </section>
+
+        <section id="text-panel">
+            <h2>识别文本</h2>
+            <label for="recognized-text">
+                当前识别内容
+            </label>
+
+            <textarea
+                id="recognized-text"
+                rows="4"
+                placeholder="识别出的手语词会显示在这里"
+                aria-describedby="text-help"
+            ></textarea>
+
+            <p id="text-help">
+                识别结果可以手动修改。
+            </p>
+
+            <div id="text-controls">
+                <button type="button" id="undo-word" disabled>
+                    撤销上一词
+                </button>
+
+                <button type="button" id="clear-text" disabled>
+                    清空
+                </button>
+
+                <button type="button" id="speak-text" disabled>
+                    朗读
+                </button>
+
+                <button type="button" id="stop-speech" disabled>
+                    停止朗读
+                </button>
+
+                <button type="button" id="finish-session" disabled>
+                    结束识别
+                </button>
+            </div>
+        </section>
+
+        <section id="dictionary">
+            <h2>手语词库</h2>
+            <p>
+                这里将展示系统可以识别的手语词、分类和动作说明。
+            </p>
+        </section>
+
+        <section id="history">
+            <h2>历史记录</h2>
+            <p>
+                这里将展示已经保存的识别记录。
+            </p>
+        </section>
+
+        <section id="settings">
+            <h2>系统设置</h2>
+            <p>
+                这里将用于调整摄像头、识别阈值和稳定时间。
+            </p>
+        </section>
+    </main>
+
+</body>
+
+</html>
