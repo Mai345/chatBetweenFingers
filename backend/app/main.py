@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
 MODEL_READY = False
@@ -24,3 +24,23 @@ def health_check():
         "version": "0.1",
         "model_ready": True,
     }
+
+
+@app.websocket("/ws/v0/recognition")
+async def recognition_socket(websocket: WebSocket):
+    await websocket.accept()
+    await websocket.send_json(
+        {
+            "type": "ready",
+            "protocol_version": "0.1",
+            "max_frame_size_bytes": 307200,
+            "recommended_width": 640,
+            "recommended_height": 480,
+        }
+    )
+
+    try:
+        while True:
+            await websocket.receive_bytes()
+    except WebSocketDisconnect:
+        pass
