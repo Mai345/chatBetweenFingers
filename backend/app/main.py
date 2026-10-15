@@ -1,7 +1,12 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+import cv2
+import numpy as np
 
 MODEL_READY = False
+MAX_FRAME_SIZE_BYTES = 300 * 1024
+MAX_FRAME_WIDTH = 1280
+MAX_FRAME_HEIGHT = 720
 
 app = FastAPI()
 
@@ -33,7 +38,7 @@ async def recognition_socket(websocket: WebSocket):
         {
             "type": "ready",
             "protocol_version": "0.1",
-            "max_frame_size_bytes": 307200,
+            "max_frame_size_bytes": MAX_FRAME_SIZE_BYTES,
             "recommended_width": 640,
             "recommended_height": 480,
         }
@@ -44,6 +49,47 @@ async def recognition_socket(websocket: WebSocket):
     try:
         while True:
             frame_bytes = await websocket.receive_bytes()
+
+            if len(frame_bytes) > MAX_FRAME_SIZE_BYTES:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "code": "FRAME_TOO_LARGE",
+                        "message": "图像帧超过300 KB限制",
+                        "recoverable": False,
+                    }
+                )
+                await websocket.close(code=1009)
+                return
+
+            encoded_image = np.frombuffer(frame_bytes, dtype=np.uint8)
+            image_bgr = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
+
+            if image_bgr is None:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "code": "INVALID_IMAGE_FRAME",
+                        "message": "无法解析JPEG图像",
+                        "recoverable": True,
+                    }
+                )
+                continue
+
+            height, width = image_bgr.shape[:2]
+
+            if width > MAX_FRAME_WIDTH or height > MAX_FRAME_HEIGHT:
+                await websocket.send_json(
+                    {
+                        "type": "error",
+                        "code": "FRAME_TOO_LARGE",
+                        "message": "图像分辨率超过1280×720限制",
+                        "recoverable": False,
+                    }
+                )
+                await websocket.close(code=1009)
+                return
+
             frame_id += 1
 
             await websocket.send_json(
