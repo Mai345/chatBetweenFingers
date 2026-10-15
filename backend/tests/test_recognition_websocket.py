@@ -15,3 +15,31 @@ def test_recognition_websocket_sends_ready():
             "recommended_width": 640,
             "recommended_height": 480,
         }
+
+
+def test_recognition_websocket_returns_incrementing_frame_ids():
+    with client.websocket_connect("/ws/v0/recognition") as websocket:
+        websocket.receive_json()
+
+        websocket.send_bytes(b"fake-jpeg-1")
+        first_result = websocket.receive_json()
+
+        websocket.send_bytes(b"fake-jpeg-2")
+        second_result = websocket.receive_json()
+
+        assert first_result == {
+            "type": "frame_result",
+            "frame_id": 1,
+            "state": "no_hand",
+            "processing_time_ms": 0,
+            "hands": [],
+            "candidate": None,
+        }
+        assert second_result == {
+            "type": "frame_result",
+            "frame_id": 2,
+            "state": "no_hand",
+            "processing_time_ms": 0,
+            "hands": [],
+            "candidate": None,
+        }

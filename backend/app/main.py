@@ -39,8 +39,22 @@ async def recognition_socket(websocket: WebSocket):
         }
     )
 
+    frame_id = 0
+
     try:
         while True:
-            await websocket.receive_bytes()
+            frame_bytes = await websocket.receive_bytes()
+            frame_id += 1
+
+            await websocket.send_json(
+                {
+                    "type": "frame_result",
+                    "frame_id": frame_id,
+                    "state": "no_hand",
+                    "processing_time_ms": 0,
+                    "hands": [],
+                    "candidate": None,
+                }
+            )
     except WebSocketDisconnect:
         pass
