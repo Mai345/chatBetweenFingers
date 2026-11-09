@@ -6,3 +6,4 @@ fastapi==0.143.0
 uvicorn==0.54.0
 websockets==17.2
 numpy==2.5.3
+argon2-cffi==25.1.0

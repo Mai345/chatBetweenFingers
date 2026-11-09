@@ -1,106 +1,99 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from contextlib import asynccontextmanager
+from pathlib import Path
+import threading
+
+from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-import cv2
-import numpy as np
+from fastapi.staticfiles import StaticFiles
 
-MODEL_READY = False
-MAX_FRAME_SIZE_BYTES = 300 * 1024
-MAX_FRAME_WIDTH = 1280
-MAX_FRAME_HEIGHT = 720
+from app.api import APIError, allowed_origin, init_db, router
+from app.training import (
+    initialize_training_database,
+    router as training_router,
+)
 
-app = FastAPI()
-
-
-@app.get("/api/v0/health")
-def health_check():
-    if not MODEL_READY:
-        return JSONResponse(
-            status_code=503,
-            content={
-                "error": {
-                    "code": "MODEL_NOT_READY",
-                    "message": "识别模型尚未准备好",
-                }
-            },
-        )
-
-    return {
-        "status": "ok",
-        "version": "0.1",
-        "model_ready": True,
-    }
+FRONTEND_DIRECTORY = Path(__file__).resolve().parents[2] / "frontend" / "v1"
 
 
-@app.websocket("/ws/v0/recognition")
-async def recognition_socket(websocket: WebSocket):
-    await websocket.accept()
-    await websocket.send_json(
-        {
-            "type": "ready",
-            "protocol_version": "0.1",
-            "max_frame_size_bytes": MAX_FRAME_SIZE_BYTES,
-            "recommended_width": 640,
-            "recommended_height": 480,
-        }
-    )
-
-    frame_id = 0
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    initialize_training_database()
+    app.state.connections = {}
+    app.state.recognizer = None
+    app.state.personal_recognizers = {}
+    app.state.training_extractor = None
+    app.state.extractor_lock = threading.Lock()
 
     try:
-        while True:
-            frame_bytes = await websocket.receive_bytes()
+        yield
+    finally:
+        if app.state.training_extractor is not None:
+            app.state.training_extractor.close()
+        app.state.personal_recognizers.clear()
+        app.state.recognizer = None
+        app.state.connections.clear()
 
-            if len(frame_bytes) > MAX_FRAME_SIZE_BYTES:
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "code": "FRAME_TOO_LARGE",
-                        "message": "图像帧超过300 KB限制",
-                        "recoverable": False,
+
+app = FastAPI(
+    title="谈指间 API",
+    version="1.0",
+    lifespan=lifespan,
+)
+app.include_router(router)
+app.include_router(training_router)
+app.mount(
+    "/app",
+    StaticFiles(
+        directory=FRONTEND_DIRECTORY,
+        html=True,
+    ),
+    name="frontend",
+)
+
+
+@app.middleware("http")
+async def check_request_origin(request, call_next):
+    is_api_request = request.url.path.startswith("/api/v1/")
+    is_write_request = request.method not in ("GET", "HEAD", "OPTIONS")
+
+    if is_api_request and is_write_request:
+        if not allowed_origin(request.headers):
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": {
+                        "code": "FORBIDDEN",
+                        "message": "请求来源不允许",
                     }
-                )
-                await websocket.close(code=1009)
-                return
-
-            encoded_image = np.frombuffer(frame_bytes, dtype=np.uint8)
-            image_bgr = cv2.imdecode(encoded_image, cv2.IMREAD_COLOR)
-
-            if image_bgr is None:
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "code": "INVALID_IMAGE_FRAME",
-                        "message": "无法解析JPEG图像",
-                        "recoverable": True,
-                    }
-                )
-                continue
-
-            height, width = image_bgr.shape[:2]
-
-            if width > MAX_FRAME_WIDTH or height > MAX_FRAME_HEIGHT:
-                await websocket.send_json(
-                    {
-                        "type": "error",
-                        "code": "FRAME_TOO_LARGE",
-                        "message": "图像分辨率超过1280×720限制",
-                        "recoverable": False,
-                    }
-                )
-                await websocket.close(code=1009)
-                return
-
-            frame_id += 1
-
-            await websocket.send_json(
-                {
-                    "type": "frame_result",
-                    "frame_id": frame_id,
-                    "state": "no_hand",
-                    "processing_time_ms": 0,
-                    "hands": [],
-                    "candidate": None,
-                }
+                },
             )
-    except WebSocketDisconnect:
-        pass
+
+    return await call_next(request)
+
+
+@app.exception_handler(APIError)
+async def handle_api_error(request, error):
+    return JSONResponse(
+        status_code=error.status,
+        content={
+            "error": {
+                "code": error.code,
+                "message": error.message,
+            }
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_validation_error(request, error):
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": {
+                "code": "VALIDATION_ERROR",
+                "message": "请求参数不合法",
+            }
+        },
+    )

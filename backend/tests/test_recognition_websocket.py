@@ -1,12 +1,9 @@
 import cv2
 import numpy as np
 import pytest
-from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app import main
-
-client = TestClient(main.app)
+from app.main import app
 
 
 def make_test_jpeg(width=10, height=10):
@@ -17,108 +14,131 @@ def make_test_jpeg(width=10, height=10):
     return encoded_image.tobytes()
 
 
-def test_recognition_websocket_sends_ready():
-    with client.websocket_connect("/ws/v0/recognition") as websocket:
+@pytest.fixture
+def session_path(client):
+    client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "socket_user",
+            "password": "password123",
+            "display_name": "连接测试",
+        },
+    )
+    response = client.post("/api/v1/sessions", json={})
+    session_id = response.json()["data"]["id"]
+    return f"/ws/v1/recognition?session_id={session_id}"
+
+
+def test_recognition_requires_login(client):
+    with client.websocket_connect("/ws/v1/recognition") as websocket:
         message = websocket.receive_json()
+        assert message["code"] == "NOT_AUTHENTICATED"
 
-        assert message == {
-            "type": "ready",
-            "protocol_version": "0.1",
-            "max_frame_size_bytes": 307200,
-            "recommended_width": 640,
-            "recommended_height": 480,
-        }
-
-
-def test_recognition_websocket_returns_incrementing_frame_ids():
-    with client.websocket_connect("/ws/v0/recognition") as websocket:
-        websocket.receive_json()
-
-        jpeg_bytes = make_test_jpeg()
-
-        websocket.send_bytes(jpeg_bytes)
-        first_result = websocket.receive_json()
-
-        websocket.send_bytes(jpeg_bytes)
-        second_result = websocket.receive_json()
-
-        assert first_result == {
-            "type": "frame_result",
-            "frame_id": 1,
-            "state": "no_hand",
-            "processing_time_ms": 0,
-            "hands": [],
-            "candidate": None,
-        }
-        assert second_result == {
-            "type": "frame_result",
-            "frame_id": 2,
-            "state": "no_hand",
-            "processing_time_ms": 0,
-            "hands": [],
-            "candidate": None,
-        }
-
-
-def test_recognition_websocket_rejects_invalid_jpeg():
-    with client.websocket_connect("/ws/v0/recognition") as websocket:
-        websocket.receive_json()
-
-        websocket.send_bytes(b"not-a-jpeg")
-        message = websocket.receive_json()
-
-        assert message == {
-            "type": "error",
-            "code": "INVALID_IMAGE_FRAME",
-            "message": "无法解析JPEG图像",
-            "recoverable": True,
-        }
-
-
-def test_recognition_websocket_closes_when_frame_too_large():
-    with client.websocket_connect("/ws/v0/recognition") as websocket:
-        websocket.receive_json()
-
-        oversized_frame = b"x" * (main.MAX_FRAME_SIZE_BYTES + 1)
-
-        websocket.send_bytes(oversized_frame)
-        error_message = websocket.receive_json()
-
-        assert error_message == {
-            "type": "error",
-            "code": "FRAME_TOO_LARGE",
-            "message": "图像帧超过300 KB限制",
-            "recoverable": False,
-        }
-
-        with pytest.raises(WebSocketDisconnect) as disconnect_info:
+        with pytest.raises(WebSocketDisconnect) as disconnected:
             websocket.receive_json()
 
-        assert disconnect_info.value.code == 1009
+        assert disconnected.value.code == 1008
 
 
-def test_recognition_websocket_closes_when_resolution_too_large():
-    with client.websocket_connect("/ws/v0/recognition") as websocket:
+def test_recognition_sends_connection_settings(client, session_path):
+    with client.websocket_connect(session_path) as websocket:
+        message = websocket.receive_json()
+
+        assert message["type"] == "connected"
+        assert message["max_frame_size_bytes"] == 307200
+        assert message["recommended_width"] == 640
+        assert message["recommended_height"] == 480
+        assert message["model_ready"] is False
+
+
+@pytest.mark.parametrize(
+    "frame_bytes",
+    [
+        b"",
+        b"not-a-jpeg",
+        b"\xff\xd8\xffbroken",
+    ],
+    ids=["empty", "not-jpeg", "broken-jpeg"],
+)
+def test_invalid_image_does_not_break_connection(
+    client, session_path, frame_bytes
+):
+    with client.websocket_connect(session_path) as websocket:
         websocket.receive_json()
+        websocket.send_bytes(frame_bytes)
+        message = websocket.receive_json()
 
-        width = main.MAX_FRAME_WIDTH + 1
-        height = main.MAX_FRAME_HEIGHT
+        assert message["code"] == "INVALID_IMAGE_FRAME"
+        assert message["recoverable"] is True
 
-        jpeg_bytes = make_test_jpeg(width, height)
+        websocket.send_bytes(make_test_jpeg())
+        assert websocket.receive_json()["code"] == "MODEL_NOT_READY"
 
-        assert len(jpeg_bytes) <= main.MAX_FRAME_SIZE_BYTES
 
-        websocket.send_bytes(jpeg_bytes)
-        error_message = websocket.receive_json()
+def test_non_jpeg_image_is_rejected(client, session_path):
+    image = np.zeros((10, 10, 3), dtype=np.uint8)
+    success, encoded_image = cv2.imencode(".png", image)
+    assert success
 
-        assert error_message == {
-            "type": "error",
-            "code": "FRAME_TOO_LARGE",
-            "message": "图像分辨率超过1280×720限制",
-            "recoverable": False,
-        }
+    with client.websocket_connect(session_path) as websocket:
+        websocket.receive_json()
+        websocket.send_bytes(encoded_image.tobytes())
+        assert websocket.receive_json()["code"] == "INVALID_IMAGE_FRAME"
 
-        with pytest.raises(WebSocketDisconnect) as disconnect_info:
+
+@pytest.mark.parametrize(
+    "frame_bytes",
+    [
+        b"x" * (307200 + 1),
+        make_test_jpeg(width=1281, height=720),
+    ],
+    ids=["message-size", "resolution"],
+)
+def test_oversized_frame_closes_connection(client, session_path, frame_bytes):
+    with client.websocket_connect(session_path) as websocket:
+        websocket.receive_json()
+        websocket.send_bytes(frame_bytes)
+
+        assert websocket.receive_json()["code"] == "FRAME_TOO_LARGE"
+        with pytest.raises(WebSocketDisconnect) as disconnected:
             websocket.receive_json()
 
-        assert disconnect_info.value.code == 1009
+        assert disconnected.value.code == 1009
+
+
+def test_inference_failure_recovers_on_next_frame(
+    client, session_path, monkeypatch
+):
+    class RecoveringRecognizer:
+        def __init__(self):
+            self.calls = 0
+
+        def process(self, image_bgr):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("模拟推理异常")
+            return [], None
+
+    monkeypatch.setattr(app.state, "recognizer", RecoveringRecognizer())
+
+    with client.websocket_connect(session_path) as websocket:
+        websocket.receive_json()
+        websocket.send_bytes(make_test_jpeg())
+        assert websocket.receive_json()["code"] == "INFERENCE_FAILED"
+
+        websocket.send_bytes(make_test_jpeg())
+        result = websocket.receive_json()
+        assert result["state"] == "no_hand"
+        assert result["frame_id"] == 1
+        assert result["processing_time_ms"] >= 0
+
+
+def test_invalid_control_message_is_recoverable(client, session_path):
+    with client.websocket_connect(session_path) as websocket:
+        websocket.receive_json()
+        websocket.send_text("not-json")
+
+        assert websocket.receive_json()["code"] == "VALIDATION_ERROR"
+
+        websocket.send_json({"type": "cancel"})
+        assert websocket.receive_json()["type"] == "session_finished"

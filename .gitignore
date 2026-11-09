@@ -5,6 +5,7 @@
 **/__pycache__/
 *.py[cod]
 .pytest_cache/
+**/.pytest-run-*/
 
 # PyCharm个人配置
 **/.idea/
@@ -16,6 +17,9 @@
 
 # 个人采集数据
 backend/data/*.csv
+backend/data/*.sqlite3
+backend/data/*.sqlite3-*
+backend/data/personal_models/
 
 # 下载和训练生成的模型
 backend/models/*.task

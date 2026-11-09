@@ -1,0 +1,495 @@
+<!doctype html>
+<html lang="zh-CN">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#f5f5f5" />
+        <title>谈指间 · 本地手语交流</title>
+        <link rel="stylesheet" href="/app/style.css" />
+        <script src="/app/app.js" defer></script>
+    </head>
+    <body>
+        <div class="shell">
+            <aside class="sidebar">
+                <a class="brand" href="#recognition"
+                    ><span class="brand-mark">指</span
+                    ><span><strong>谈指间</strong></span></a
+                >
+                <p class="nav-label">工作空间</p>
+                <nav aria-label="主导航">
+                    <a href="#recognition" data-page="recognition">实时交流</a>
+                    <a href="#gestures" data-page="gestures">手势词库</a>
+                    <a href="#history" data-page="history">历史记录</a>
+                    <a href="#settings" data-page="settings">个人设置</a>
+                </nav>
+                <div class="side-footer">本地工作台</div>
+            </aside>
+            <main>
+                <header class="topbar">
+                    <span>本地手语交流工作台</span>
+                    <div class="top-actions">
+                        <span id="user-label">未登录</span
+                        ><button id="logout" class="link" hidden>
+                            退出登录
+                        </button>
+                    </div>
+                </header>
+                <div class="content">
+                    <div
+                        id="notice"
+                        class="notice"
+                        role="status"
+                        aria-live="polite"
+                        hidden
+                    ></div>
+                    <section id="auth" class="auth-view" hidden>
+                        <div class="auth-intro">
+                            <h1>手语交流工作台</h1>
+                        </div>
+                        <div class="auth-card">
+                            <div class="tabs">
+                                <button
+                                    type="button"
+                                    class="active"
+                                    data-auth="login"
+                                >
+                                    登录</button
+                                ><button type="button" data-auth="register">
+                                    创建账号
+                                </button>
+                            </div>
+                            <h2 id="auth-title">欢迎回来</h2>
+
+                            <form id="auth-form">
+                                <label
+                                    >用户名<input
+                                        name="username"
+                                        minlength="4"
+                                        maxlength="32"
+                                        autocomplete="username"
+                                        required
+                                        placeholder="4 至 32 个字符" /></label
+                                ><label
+                                    >密码<input
+                                        name="password"
+                                        type="password"
+                                        minlength="8"
+                                        maxlength="64"
+                                        autocomplete="current-password"
+                                        required
+                                        placeholder="至少 8 个字符" /></label
+                                ><label id="display-name-field" hidden
+                                    >显示名称<input
+                                        name="display_name"
+                                        maxlength="32"
+                                        placeholder="显示名称" /></label
+                                ><button
+                                    class="button primary full"
+                                    id="auth-submit"
+                                >
+                                    登录工作台
+                                </button>
+                                <p
+                                    class="form-error"
+                                    id="auth-error"
+                                    role="alert"
+                                ></p>
+                            </form>
+                        </div>
+                    </section>
+                    <div id="workspace" hidden>
+                        <section id="recognition" class="page">
+                            <div class="page-heading">
+                                <div>
+                                    <h1>实时交流</h1>
+                                </div>
+                                <span class="badge" id="connection-status"
+                                    >尚未开始</span
+                                >
+                            </div>
+                            <div class="model-banner" id="model-banner">
+                                <span>尚未训练个人模型</span>
+                                <a href="#gestures">前往训练</a>
+                            </div>
+                            <div class="recognition-grid">
+                                <div class="panel camera-panel">
+                                    <div class="panel-header">
+                                        <div>
+                                            <h2>摄像头</h2>
+                                        </div>
+                                        <span
+                                            class="mini-label"
+                                            id="camera-status"
+                                            >未开启</span
+                                        >
+                                    </div>
+                                    <div class="camera-stage">
+                                        <video
+                                            id="camera-video"
+                                            autoplay
+                                            muted
+                                            playsinline
+                                        ></video
+                                        ><canvas id="landmarks"></canvas
+                                        ><canvas id="capture" hidden></canvas>
+                                        <div id="camera-empty">
+                                            <strong>摄像头未开启</strong>
+                                        </div>
+                                    </div>
+                                    <div class="camera-controls">
+                                        <button
+                                            id="start-camera"
+                                            class="button dark"
+                                        >
+                                            开启摄像头</button
+                                        ><button
+                                            id="stop-camera"
+                                            class="button subtle"
+                                            disabled
+                                        >
+                                            关闭</button
+                                        ><label class="select-label"
+                                            >摄像头<select
+                                                id="camera-select"
+                                                aria-label="选择摄像头"
+                                            >
+                                                <option value="">
+                                                    默认摄像头
+                                                </option>
+                                            </select></label
+                                        >
+                                    </div>
+                                    <p id="camera-message" class="helper"></p>
+                                </div>
+                                <div class="panel sentence-panel">
+                                    <div class="panel-header">
+                                        <div>
+                                            <h2>交流文字</h2>
+                                        </div>
+                                        <span class="mini-label">本次会话</span>
+                                    </div>
+                                    <label class="sr-only" for="draft"
+                                        >交流文字</label
+                                    ><textarea
+                                        id="draft"
+                                        maxlength="10000"
+                                        placeholder="输入交流内容"
+                                    ></textarea>
+                                    <div class="draft-meta">
+                                        <span id="draft-count">0 / 10000</span
+                                        ><span id="draft-status"
+                                            >未开始会话</span
+                                        >
+                                    </div>
+                                    <div class="draft-actions">
+                                        <button id="speak" class="button dark">
+                                            朗读文字</button
+                                        ><button
+                                            id="undo"
+                                            class="button subtle"
+                                        >
+                                            撤销识别词</button
+                                        ><button
+                                            id="clear"
+                                            class="button subtle"
+                                        >
+                                            清空
+                                        </button>
+                                    </div>
+
+                                    <div class="session-actions">
+                                        <button
+                                            id="start-session"
+                                            class="button primary"
+                                        >
+                                            开始会话</button
+                                        ><button
+                                            id="finish-session"
+                                            class="button subtle"
+                                            disabled
+                                        >
+                                            结束并保存</button
+                                        ><button
+                                            id="cancel-session"
+                                            class="link danger"
+                                            disabled
+                                        >
+                                            取消会话
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                        <section id="gestures" class="page" hidden>
+                            <div class="page-heading">
+                                <div>
+                                    <h1>手势词库</h1>
+                                </div>
+                            </div>
+                            <div class="section-tools">
+                                <label class="search-label"
+                                    ><span>搜索词条</span
+                                    ><input
+                                        id="gesture-search"
+                                        placeholder="搜索手势名称"
+                                /></label>
+                            </div>
+                            <section
+                                class="panel training-panel"
+                                aria-label="手势采集与训练"
+                            >
+                                <h2>自定义手势与训练</h2>
+                                <p class="helper">
+                                    至少2种手势，每种至少30张；仅保存关键点。
+                                </p>
+                                <form id="gesture-create" class="form-grid">
+                                    <label
+                                        >手势名称<input
+                                            name="label"
+                                            maxlength="32"
+                                            required
+                                            placeholder="例如：谢谢"
+                                    /></label>
+                                    <label
+                                        >动作说明<input
+                                            name="description"
+                                            maxlength="500"
+                                            placeholder="描述动作"
+                                    /></label>
+                                    <button class="button primary">
+                                        创建手势
+                                    </button>
+                                </form>
+                                <div class="training-grid">
+                                    <div>
+                                        <div id="training-camera-stage">
+                                            <video
+                                                id="training-video"
+                                                autoplay
+                                                muted
+                                                playsinline
+                                                aria-label="采集摄像头"
+                                            ></video>
+                                            <canvas
+                                                id="training-landmarks"
+                                                aria-label="采集手部关键点与骨架"
+                                            ></canvas>
+                                        </div>
+                                        <p
+                                            id="training-preview-status"
+                                            class="helper"
+                                            role="status"
+                                            aria-live="polite"
+                                        >
+                                            摄像头未开启
+                                        </p>
+                                        <div class="camera-controls">
+                                            <button
+                                                id="training-camera"
+                                                class="button dark"
+                                            >
+                                                打开采集摄像头
+                                            </button>
+                                            <button
+                                                id="training-camera-stop"
+                                                class="button subtle"
+                                            >
+                                                关闭摄像头
+                                            </button>
+                                        </div>
+                                        <label
+                                            >采集到哪个手势<select
+                                                id="training-label"
+                                            >
+                                                <option value="">
+                                                    先创建手势
+                                                </option>
+                                            </select></label
+                                        >
+                                        <div class="camera-controls">
+                                            <button
+                                                id="training-capture"
+                                                class="button primary"
+                                            >
+                                                拍照采集一张
+                                            </button>
+                                            <button
+                                                id="training-batch"
+                                                class="button subtle"
+                                            >
+                                                开始新批次
+                                            </button>
+                                        </div>
+                                        <p
+                                            id="training-batch-label"
+                                            class="helper"
+                                        ></p>
+                                    </div>
+                                    <div>
+                                        <h3>数据与模型</h3>
+
+                                        <button
+                                            id="training-export"
+                                            class="button subtle"
+                                        >
+                                            导出数据
+                                        </button>
+                                        <label
+                                            >导入数据文件<input
+                                                id="training-import"
+                                                type="file"
+                                                accept="application/json,.json"
+                                        /></label>
+                                        <button
+                                            id="training-train"
+                                            class="button primary"
+                                        >
+                                            训练并启用新模型
+                                        </button>
+                                        <button
+                                            id="training-refresh"
+                                            class="button subtle"
+                                        >
+                                            刷新状态
+                                        </button>
+                                        <p
+                                            id="training-message"
+                                            role="status"
+                                            class="helper"
+                                        ></p>
+                                        <pre
+                                            id="training-result"
+                                            aria-label="训练报告"
+                                        ></pre>
+                                    </div>
+                                </div>
+                            </section>
+                            <div id="gesture-list" class="gesture-list"></div>
+                        </section>
+                        <section id="history" class="page" hidden>
+                            <div class="page-heading">
+                                <div>
+                                    <h1>历史会话</h1>
+                                </div>
+                                <button
+                                    id="refresh-history"
+                                    class="button subtle"
+                                >
+                                    刷新
+                                </button>
+                            </div>
+                            <div id="history-list" class="history-list"></div>
+                            <div class="pagination">
+                                <button id="history-prev" class="button subtle">
+                                    上一页</button
+                                ><span id="history-page">第 1 页</span
+                                ><button
+                                    id="history-next"
+                                    class="button subtle"
+                                >
+                                    下一页
+                                </button>
+                            </div>
+                        </section>
+                        <section id="settings" class="page" hidden>
+                            <div class="page-heading">
+                                <div>
+                                    <h1>个人设置</h1>
+                                </div>
+                            </div>
+                            <form
+                                id="settings-form"
+                                class="panel settings-form"
+                            >
+                                <div class="settings-group">
+                                    <h2>识别与显示</h2>
+                                    <div class="form-grid">
+                                        <label
+                                            >置信度阈值<input
+                                                name="confidence_threshold"
+                                                type="number"
+                                                min="0.5"
+                                                max="0.99"
+                                                step="0.01"
+                                                required /></label
+                                        ><label
+                                            >稳定确认时间（毫秒）<input
+                                                name="stable_duration_ms"
+                                                type="number"
+                                                min="300"
+                                                max="3000"
+                                                step="100"
+                                                required /></label
+                                        ><label
+                                            >冷却时间（毫秒）<input
+                                                name="cooldown_ms"
+                                                type="number"
+                                                min="300"
+                                                max="5000"
+                                                step="100"
+                                                required
+                                        /></label>
+                                    </div>
+                                    <div class="switches">
+                                        <label
+                                            ><input
+                                                name="mirror_preview"
+                                                type="checkbox"
+                                            />
+                                            镜像预览</label
+                                        ><label
+                                            ><input
+                                                name="show_landmarks"
+                                                type="checkbox"
+                                            />
+                                            显示关键点</label
+                                        ><label
+                                            ><input
+                                                name="show_confidence"
+                                                type="checkbox"
+                                            />
+                                            显示置信度</label
+                                        >
+                                    </div>
+                                </div>
+                                <div class="settings-group">
+                                    <h2>语音朗读</h2>
+                                    <div class="switches">
+                                        <label
+                                            ><input
+                                                name="audio_enabled"
+                                                type="checkbox"
+                                            />
+                                            启用语音</label
+                                        >
+                                    </div>
+                                    <div class="form-grid">
+                                        <label
+                                            >语速<input
+                                                name="audio_rate"
+                                                type="number"
+                                                min="0.5"
+                                                max="2"
+                                                step="0.1"
+                                                required /></label
+                                        ><label
+                                            >音量<input
+                                                name="audio_volume"
+                                                type="number"
+                                                min="0"
+                                                max="1"
+                                                step="0.1"
+                                                required
+                                        /></label>
+                                    </div>
+                                </div>
+                                <button class="button primary">保存设置</button>
+                            </form>
+                        </section>
+                    </div>
+                </div>
+            </main>
+        </div>
+        <script src="/app/training.js" defer></script>
+    </body>
+</html>
