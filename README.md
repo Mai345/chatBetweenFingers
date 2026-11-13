@@ -45,7 +45,6 @@ backend/
   models/          本机下载与训练生成的模型（不上传 Git）
 frontend/
   v1/              当前前端页面、样式和脚本
-  pages/           旧入口，跳转到当前页面
 docs/              v1 基础接口规范
 ```
 
